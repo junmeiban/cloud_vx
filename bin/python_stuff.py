@@ -45,6 +45,8 @@ griddedDatasets =  {
    'WWMCA'    : { 'gridType':'LatLon', 'latVar':'latitude','latDef':[-90.0,0.25,721], 'lonVar':'longitude',  'lonDef':[0.0,0.25,1440],   'flipY':False, 'ftype':'grib'},
    'MPAS'     : { 'gridType':'LatLon', 'latVar':'latitude','latDef':[-90.0,0.25,721],  'lonVar':'longitude',  'lonDef':[0.0,0.25,1440],   'flipY':False, 'ftype':'nc'},
    'SAT_WWMCA_MEAN' : { 'gridType':'LatLon', 'latVar':'lat','latDef':[-90.0,0.25,721], 'lonVar':'lon', 'lonDef':[0.0,0.25,1440], 'flipY':False, 'ftype':'nc' },
+   'CMORPH': { 'gridType':'LatLon', 'latVar':'lat','latDef':[-59.875,0.25,480], 'lonVar':'lon', 'lonDef':[0.125,0.25,1440], 'flipY':True, 'ftype':'nc'},
+   'IMERG' : { 'gridType':'LatLon', 'latVar':'lat','latDef':[-89.95,0.1,1800], 'lonVar':'lon', 'lonDef':[-179.95,0.1,3600], 'flipY':True, 'ftype':'nc' },
    'point'    : { 'gridType':'LatLon', 'latVar':'latitude','latDef':[-90.0,0.156250,1152], 'lonVar':'longitude',  'lonDef':[0.117187,0.234375,1536],   'flipY':False, 'ftype':'nc'},
 }
    #TODO:Correct one, but MET can ingest a Gaussian grid only in Grib2 format (from Randy B.)
@@ -86,10 +88,12 @@ verifVariablesModel = {
     'highCloudFrac'  :  {'GFS':[highCloudFrac_GFS], 'GALWEM17':[highCloudFrac_GALWEM], 'GALWEM':[highCloudFrac_GALWEM], 'MPAS':['cldfrac_high_UM']},
     'cloudTopHeight' :  {'GFS':['']               , 'GALWEM17':[cloudTopHeight_GALWEM], 'GALWEM':[cloudTopHeight_GALWEM], 'MPAS':['cldht_top_UM']},
     'cloudBaseHeight' : {'GFS':['']               , 'GALWEM17':[cloudBaseHeight_GALWEM], 'GALWEM':[cloudBaseHeight_GALWEM], 'MPAS':['cldht_base_UM']},
+    'precip'         :  {'GFS':['rain'], 'MPAS':['rain']},
 }
 
 cloudFracCatThresholds = '>0, <10.0, >=10.0, >=20.0, >=30.0, >=40.0, >=50.0, >=60.0, >=70.0, >=80.0, >=90.0' # MET format string
 brightnessTempThresholds = '<280.0, <275.0, <273.15, <270.0, <265.0, <260.0, <255.0, <250.0, <245.0, <240.0, <235.0, <230.0, <225.0, <220.0, <215.0, <210.0, <=SFP1, <=SFP5, <=SFP10, <=SFP25, <=SFP50, >=SFP50, >=SFP75, >=SFP90, >=SFP95, >=SFP99'
+precipFracCatThresholds = '>0, <10.0, >=10.0, >=20.0, >=30.0, >=40.0, >=50.0, >=60.0, >=70.0, >=80.0, >=90.0' # MET format string
 verifVariables = {
    'binaryCloud'    : { 'MERRA2':['CLDTOT'], 'SATCORPS':['cloud_percentage_level'],      'ERA5':['TCC'], 'WWMCA':[totalCloudFrac_WWMCA], 'SAT_WWMCA_MEAN':['Mean_WWMCA_SATCORPS'], 'units':'NA',  'thresholds':'>0.0', 'interpMethod':'nearest' },
    'totalCloudFrac' : { 'MERRA2':['CLDTOT'], 'SATCORPS':['cloud_percentage_level'],      'ERA5':['TCC'], 'WWMCA':[totalCloudFrac_WWMCA], 'SAT_WWMCA_MEAN':['Mean_WWMCA_SATCORPS'], 'units':'%',   'thresholds':cloudFracCatThresholds, 'interpMethod':'bilin' },
@@ -102,6 +106,7 @@ verifVariables = {
    'cloudBaseHeight': { 'MERRA2':['']      , 'SATCORPS':['cloud_height_base_level'],     'ERA5':['CBH'], 'WWMCA':cloudBaseHeight_WWMCA, 'units':'m',   'thresholds':'NA', 'interpMethod':'nearest'},
    'cloudCeiling'   : { 'MERRA2':['']      , 'SATCORPS':[''],                            'ERA5':['']   , 'units':'m',   'thresholds':'NA', 'interpMethod':'bilin'},
    'brightnessTemp' : { 'MERRA2':['']      , 'SATCORPS':[''],                            'ERA5':['']   , 'units':'K',   'thresholds':brightnessTempThresholds, 'interpMethod':'bilin'},
+   'precip'    : { 'CMORPH':['cmorph'], 'IMERG':['precipitationCal'],  'units':'NA',  'thresholds':precipFracCatThresholds, 'interpMethod':'nearest' },
 }
 
 # Combine the two dictionaries
@@ -282,6 +287,16 @@ def getCloudCeiling(source,data):
       except: x = data[0][0,:,:]
    return x
 
+def getPrecip(source,data):
+   if source == 'CMORPH':
+      x = data[0][0,:,:]
+   if source == 'IMERG':
+      x = data[0][0,:,:]
+      x [x == -9999.9] = 0.
+   elif source == 'MPAS':
+      x = data[0][0,:,:]
+   return x
+
 # add other functions for different variables
 
 ###########
@@ -396,6 +411,7 @@ def getDataArray(inputFile,source,variable,dataSource):
    if variable == 'cloudTopHeight':  raw_data = getCloudTopHeight(source,data)
    if variable == 'cloudBaseHeight': raw_data = getCloudBaseHeight(source,data)
    if variable == 'cloudCeiling':    raw_data = getCloudCeiling(source,data)
+   if variable == 'precip':          raw_data = getPrecip(source,data)
 
    raw_data = np.where(np.isnan(raw_data), missing_values, raw_data) # replace np.nan to missing_values (for MET)
 

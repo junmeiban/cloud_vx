@@ -5,7 +5,7 @@
 #PBS -k eod
 #PBS -m abe
 #PBS -q regular
-#PBS -l walltime=09:00:00
+#PBS -l walltime=00:59:00
 ### Request one chunk with ncpus and mpiprocs set to
 ### the number of lines in the command file
 #PBS -l select=1:ncpus=27:mpiprocs=27

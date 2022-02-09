@@ -61,12 +61,16 @@ export MET_PYTHON_EXE=`which python` #export MET_PYTHON_EXE=/glade/u/apps/ch/opt
 
 ####
 
+#export EXPT=30km60km_2018_conv_1200km6km
+export EXPT=30km60km_2018_conv_ama_1200km6km
+
 # Vars used for manual testing of the script
-export START_TIME=2020072400
-export FINAL_TIME=2020082400
+export START_TIME=2018041800
+export FINAL_TIME=2018051400
 export FCST_TIME_LIST=$1     #"00 06 12 18 24 30 36 42 48"
 export VX_OBS_LIST=$2        #"SATCORPS MERRA2 ERA5 WWMCA SAT_WWMCA_MEAN"
-export VX_VAR_LIST="totalCloudFrac" #"binaryCloud" #lowCloudFrac" #"totalCloudFrac lowCloudFrac midCloudFrac highCloudFrac binaryCloud" # cloudTopTemp cloudTopPres cloudBaseHeight cloudTopHeight
+export VX_VAR_LIST="precip" #"totalCloudFrac" #"binaryCloud" #lowCloudFrac" #"totalCloudFrac lowCloudFrac midCloudFrac highCloudFrac binaryCloud" # cloudTopTemp cloudTopPres cloudBaseHeight cloudTopHeight
+export intervalH=24  # if use precip
 export DOMAIN_LIST="global"
 export GRID_VX="FCST"
 #export MET_EXE_ROOT=/glade/p/ral/jntp/MET/MET_releases/8.1_python/bin
@@ -75,9 +79,9 @@ export MET_CONFIG=/glade/scratch/`whoami`/cloud_vx/static/MET/met_config
 export DATAROOT=/glade/scratch/`whoami`/cloud_vx
 #export FCST_DIR=/gpfs/u/home/schwartz/cloud_verification/GFS_grib_0.25deg  #GFS model
 #export FCST_DIR=/glade/scratch/schwartz/MPAS/30km_mesh/cold_start  # MPAS model, 30-km forecasts, interpolated to 0.25 degrees
-export FCST_DIR=/glade/scratch/bjung/pandac/BJ_2020_30km_clr_3dvar_rh_q2fix_nsmterrainfix/FC2  #MPAS-JEDI demo
+export FCST_DIR=/glade/scratch/`whoami`/pandac/$EXPT/FC2  #MPAS-JEDI demo
 #export FCST_DIR=/glade/scratch/schwartz/GALWEM                    # GALWEM17 and GALWEM and models (GALWEM 17 is 17-km GALWEM from 2017), "GALWEM" is 0.25 degree from Air Force in 2020-2021
-export RAW_OBS=/glade/scratch/schwartz/OBS
+export RAW_OBS=/glade/scratch/`whoami`/OBS
 export MODEL="MPAS" #"GALWEM" # Options are "GFS", "MPAS", "GALWEM17", or "GALWEM". Also, set to "WWMCA" if you want to treat WWMCA as forecast, and, say, SATCORPS as obs.
 
 export INCORPORATE_OBS_ERROR=false # If true (lowercase) then take random draws from obs error and add to forecast cloud fractions
@@ -139,7 +143,9 @@ export FCST_TIME
 echo "====== THIS STARTS for "+`date`
 
 # Go to working directory
-workdir=${DATAROOT}/metprd/${START_TIME}/f${FCST_TIME}
+#workdir=${DATAROOT}/metprd/${START_TIME}/f${FCST_TIME}
+workdir=/glade/scratch/`whoami`/pandac/$EXPT/metprd/${START_TIME}/f${FCST_TIME}
+
 ${MKDIR} -p ${workdir}
 cd ${workdir}
 
@@ -150,7 +156,7 @@ export VX_OBS
 # Loop through the veryfing obs dataset
 for VX_VAR in ${VX_VAR_LIST}; do
 export VX_VAR
-
+echo 'jban check VX_VAR=', $VX_VAR
 # Loop through the domain list
 for DOMAIN in ${DOMAIN_LIST}; do
    
@@ -177,6 +183,11 @@ for DOMAIN in ${DOMAIN_LIST}; do
    # CSS commented out...not currently used
 #   PVDATE=`${DATAROOT}/exec/da_advance_time.exe ${VDATE} -12`
 #   PVYYYYMMDD=`${ECHO} ${PVDATE} | ${CUT} -c1-8`
+    if [ ${VX_VAR} == "precip" ]; then
+       VDATE=`${DATAROOT}/exec/da_advance_time.exe ${VDATE} -24` # Valid time
+       RAIN_VALID_TIME=`${DATAROOT}/exec/da_advance_time.exe ${VDATE} 0 -f ccyymmdd`
+       echo 'jban check time,' $VDATE $RAIN_VALID_TIME
+    fi
 
     # Specify mask directory structure
     MASKS=${MET_CONFIG}/masks
@@ -184,8 +195,8 @@ for DOMAIN in ${DOMAIN_LIST}; do
 
     # Specify the MET Grid-Stat and MODE configuration files to be used
     #GS_CONFIG_LIST="${MET_CONFIG}/GridStatConfig_trad ${MET_CONFIG}/MODEConfig_trad"  # CSS, I feel like this should be defined elsewhere...
-    #GS_CONFIG_LIST="${MET_CONFIG}/GridStatConfig_trad"  # CSS, I feel like this should be defined elsewhere...
-    GS_CONFIG_LIST="${MET_CONFIG}/GridStatConfig_trad ${MET_CONFIG}/GridStatConfig_nbr ${MET_CONFIG}/GridStatConfig_prob"  # CSS, I feel like this should be defined elsewhere...
+    GS_CONFIG_LIST="${MET_CONFIG}/GridStatConfig_trad"  # CSS, I feel like this should be defined elsewhere...
+    #GS_CONFIG_LIST="${MET_CONFIG}/GridStatConfig_trad ${MET_CONFIG}/GridStatConfig_nbr ${MET_CONFIG}/GridStatConfig_prob"  # CSS, I feel like this should be defined elsewhere...
 
     # Get the forecast to verify
     if [ ${FCST_TIME} == "09" ]; then # Need some weird logic for FCST_TIME = 09
@@ -256,9 +267,13 @@ for DOMAIN in ${DOMAIN_LIST}; do
 	elif [ ${MODEL} == "GALWEM" ]; then
 	    FCST_FILE=${FCST_DIR}/${START_TIME}/PS.557WW_SC.U_DI.C_DC.GRID_GP.GALWEM-GD_SP.COMPLEX_GR.C0P25DEG_AR.GLOBAL_PA.NCAR_DD.${YYYYMMDD}_CY.${HH}_FH.${FCST_HRS}_DF.GR2
 	elif [ ${MODEL} == "MPAS" ]; then
-            MPAS_VALID_TIME=`${DATAROOT}/exec/da_advance_time.exe ${VDATE} 0 -f ccyy-mm-dd_hh.nn.ss`
-	    #FCST_FILE=${FCST_DIR}/${START_TIME}/fc_48h/GFS_FV3_initial_conditions/diag.${MPAS_VALID_TIME}_latlon.nc
-	    FCST_FILE=${FCST_DIR}/${START_TIME}/diag.${MPAS_VALID_TIME}_latlon.nc
+            if [ ${VX_VAR} == "precip" ]; then
+               FCST_FILE=${FCST_DIR}/${START_TIME}/mpasout.${RAIN_VALID_TIME}_S000000-E235900_rain_latlon.nc
+            else
+               MPAS_VALID_TIME=`${DATAROOT}/exec/da_advance_time.exe ${VDATE} 0 -f ccyy-mm-dd_hh.nn.ss`
+               #FCST_FILE=${FCST_DIR}/${START_TIME}/fc_48h/GFS_FV3_initial_conditions/diag.${MPAS_VALID_TIME}_latlon.nc
+               FCST_FILE=${FCST_DIR}/${START_TIME}/diag.${MPAS_VALID_TIME}_latlon.nc
+            fi
         elif  [ ${MODEL} == "WWMCA" ]; then # Let's treat WWMCA as the model to compare to SATCORPS!
             FCST_FILE=${RAW_OBS}/${MODEL}/WWMCA_${VDATE}00_ECE15_M.GR1
 	else
@@ -292,6 +307,10 @@ for DOMAIN in ${DOMAIN_LIST}; do
           OBS_FILE=${RAW_OBS}/${VX_OBS}/WWMCA_${VDATE}00_ECE15_M.GR1
         elif  [ ${VX_OBS} == "SAT_WWMCA_MEAN" ]; then
           OBS_FILE=${RAW_OBS}/${VX_OBS}/totcldfra_${VDATE}.nc
+        elif  [ ${VX_OBS} == "CMORPH" ]; then
+          OBS_FILE=${RAW_OBS}/${VX_OBS}/daily/CMORPH_V1.0_ADJ_0.25deg-DLY_00Z_${RAIN_VALID_TIME}.nc
+        elif  [ ${VX_OBS} == "IMERG" ]; then
+          OBS_FILE=${RAW_OBS}/${VX_OBS}/daily/3B-DAY.MS.MRG.3IMERG.${RAIN_VALID_TIME}-S000000-E235959.V06.nc4
         fi
 
 	# Make sure obs file exists
